@@ -17,7 +17,8 @@ const App = () => {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
 
-  const API_BASE_URL = 'http://localhost:5000';
+  // Use the deployed Render URL instead of localhost
+  const API_BASE_URL = 'https://marty-shopping-assistant-1.onrender.com';
 
   const quickAddProducts = [
     {
