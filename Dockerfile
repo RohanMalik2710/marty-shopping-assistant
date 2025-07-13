@@ -1,32 +1,29 @@
 FROM python:3.12-slim
 
-# Install system dependencies
+# Install required OS packages
 RUN apt-get update && apt-get install -y \
     build-essential \
     libzbar0 \
+    libgl1 \
     curl \
     git \
-    && apt-get clean
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js (use NodeSource for latest stable version)
+# Install Node.js (for frontend build)
 RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
     apt-get install -y nodejs
 
-# Set workdir
 WORKDIR /app
 
 # Install Python dependencies
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy all project files
+# Copy project files
 COPY . .
 
 # Build frontend
 RUN cd frontend && npm install && npm run build
 
-# Expose port (optional, if running locally)
-EXPOSE 8000
-
-# Run the backend using Gunicorn
+# Start the app
 CMD ["gunicorn", "-w", "1", "-b", "0.0.0.0:8000", "backend.app:app"]
