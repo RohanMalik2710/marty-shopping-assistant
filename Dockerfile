@@ -25,5 +25,5 @@ COPY . .
 # Build frontend
 RUN cd frontend && npm install && npm run build
 
-# Start the app
-CMD ["gunicorn", "-w", "1", "-b", "0.0.0.0:$PORT", "backend.app:app"]
+# Start the app (shell form to expand $PORT)
+CMD gunicorn -w 1 -b 0.0.0.0:$PORT backend.app:app
