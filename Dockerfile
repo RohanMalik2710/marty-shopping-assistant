@@ -22,8 +22,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy project files
 COPY . .
 
-# Build frontend
+# Build frontend to dist
 RUN cd frontend && npm install && npm run build
 
-# Start the app (shell form to expand $PORT)
+# Start the app
 CMD gunicorn -w 1 -b 0.0.0.0:$PORT backend.app:app
