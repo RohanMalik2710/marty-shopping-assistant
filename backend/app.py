@@ -7,7 +7,7 @@ import threading
 import requests
 import time
 
-app = Flask(__name__, static_folder='../app/frontend/build')
+app = Flask(__name__, static_folder='/app/frontend/build')
 CORS(app)
 
 # Sample in-memory product database with hardcoded barcode IDs
