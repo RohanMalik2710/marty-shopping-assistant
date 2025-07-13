@@ -71,17 +71,16 @@ cart = {}
 last_barcode_time = {}
 last_add_time = 0
 
-# Helper function to find product by barcode
-def find_product_by_barcode(barcode):
-    return next((product for product in products if product["barcode"] == barcode), None)
+# Helper function to find product by barcode or ID
+def find_product(barcode_or_id):
+    return next((product for product in products if product["barcode"] == barcode_or_id or str(product["id"]) == barcode_or_id), None)
 
 # Camera scan function for real-time scanning with rate limiting and debounce
 def scan_barcodes():
     global cart, last_add_time, last_barcode_time
     cap = None
     try:
-        # Try different camera indices for USB 2.0 camera
-        for index in range(3):  # Test indices 0, 1, 2
+        for index in range(3):
             cap = cv2.VideoCapture(index)
             if cap.isOpened():
                 print(f"USB camera found at index {index}")
@@ -90,9 +89,9 @@ def scan_barcodes():
         else:
             raise Exception("No USB camera found. Check connection and drivers.")
 
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)  # Set resolution for USB 2.0
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        cap.set(cv2.CAP_PROP_FPS, 15)  # Conservative frame rate
+        cap.set(cv2.CAP_PROP_FPS, 15)
 
         print("Scanning barcodes continuously. Press 'q' to stop...")
         while True:
@@ -107,15 +106,11 @@ def scan_barcodes():
                 barcode_data = obj.data.decode('utf-8')
                 print(f"Detected barcode: {barcode_data}")
 
-                # Rate limiting: Allow addition only once per second
                 if current_time - last_add_time < 1:
                     continue
 
-                # Debounce logic: Check if the same barcode was detected recently
-                if barcode_data in last_barcode_time:
-                    time_diff = current_time - last_barcode_time[barcode_data]
-                    if time_diff < 2:  # If less than 2 seconds, assume it didn't leave the camera
-                        continue
+                if barcode_data in last_barcode_time and current_time - last_barcode_time[barcode_data] < 2:
+                    continue
 
                 url = f"http://localhost:5000/product/{barcode_data}"
                 try:
@@ -126,17 +121,15 @@ def scan_barcodes():
                             cart[barcode_data] = {"product": product, "quantity": 1}
                         else:
                             cart[barcode_data]["quantity"] += 1
-                        last_add_time = current_time  # Update last addition time
-                        last_barcode_time[barcode_data] = current_time  # Update last detection time
+                        last_add_time = current_time
+                        last_barcode_time[barcode_data] = current_time
                         print(f"Added item with barcode {barcode_data} to cart. Cart: {cart}")
                     else:
                         print(f"Error: Product not found for barcode {barcode_data}")
                 except requests.RequestException as e:
                     print(f"Network error: Failed to fetch product - {str(e)}")
 
-                pts = obj.polygon
-                if len(pts) > 4:
-                    pts = pts[:4]
+                pts = obj.polygon[:4] if len(obj.polygon) > 4 else obj.polygon
                 cv2.polylines(frame, [pts], True, (0, 255, 0), 3)
 
             cv2.imshow('Barcode Scanner', frame)
@@ -153,29 +146,35 @@ def scan_barcodes():
         cv2.destroyAllWindows()
         print("Scanning stopped. Final cart contents:", cart)
 
-# Route to fetch product by barcode
-@app.route('/product/<barcode>', methods=['GET'])
-def get_product(barcode):
-    product = find_product_by_barcode(barcode)
+# Route to fetch product by barcode or ID
+@app.route('/product/<identifier>', methods=['GET'])
+def get_product(identifier):
+    product = find_product(identifier)
     if product:
         return jsonify(product), 200
     else:
         return jsonify({"error": "Product not found"}), 404
 
-# Route to fetch recommendations based on product barcode and budget
-@app.route('/recommendations/<barcode>', methods=['GET'])
-def get_recommendations(barcode):
-    product = find_product_by_barcode(barcode)
+# Route to fetch recommendations based on product barcode or ID and budget
+@app.route('/recommendations/<identifier>', methods=['GET'])
+def get_recommendations(identifier):
+    product = find_product(identifier)
     if not product:
+        print(f"No product found for identifier: {identifier}")
         return jsonify([]), 200
 
     remaining_budget = float(request.args.get('budget', float('inf')))
+    print(f"Fetching recommendations for {product['name']} with budget {remaining_budget}")
 
     complementary_categories = {
         "Fruits": ["Beverages", "Bakery"],
         "Bakery": ["Beverages", "Pantry"],
         "Beverages": ["Fruits", "Pantry"],
-        "Pantry": ["Bakery", "Beverages"]
+        "Pantry": ["Bakery", "Beverages"],
+        "Household": ["Home"],  # Added for Eco-Friendly Detergent
+        "Dairy": ["Snacks"],    # Added for Greek Yogurt
+        "Home": ["Household"],  # Added for Reusable Water Bottle
+        "Snacks": ["Dairy"]     # Added for Granola Bars
     }
 
     recommendations = [
@@ -187,6 +186,7 @@ def get_recommendations(barcode):
 
     recommendations.sort(key=lambda x: (-x["ecoFriendly"], x["price"]))
     recommendations = recommendations[:4]
+    print(f"Recommendations: {recommendations}")
 
     return jsonify(recommendations), 200
 
@@ -203,7 +203,7 @@ def trigger_scan():
 def stop_scan():
     global scan_thread
     if 'scan_thread' in globals() and scan_thread.is_alive():
-        cv2.destroyAllWindows()  # This will stop the while loop in scan_barcodes
+        cv2.destroyAllWindows()
         scan_thread.join()
         return jsonify({"message": "Barcode scanning stopped", "status": "success"}), 200
     return jsonify({"message": "No active scan to stop", "status": "info"}), 200
@@ -216,13 +216,12 @@ def get_cart():
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
-    print(f"Checking path: {os.path.join(app.static_folder, path)}")  # Debug log
+    print(f"Checking path: {os.path.join(app.static_folder, path)}")
     if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
-        print(f"Found file: {os.path.join(app.static_folder, path)}")  # Debug log
+        print(f"Found file: {os.path.join(app.static_folder, path)}")
         return send_from_directory(app.static_folder, path)
-    # Fallback to index.js or adjust based on frontend needs
     index_path = 'index.js' if os.path.exists(os.path.join(app.static_folder, 'index.js')) else 'index.html'
-    print(f"Serving {index_path} from: {os.path.join(app.static_folder, index_path)}")  # Debug log
+    print(f"Serving {index_path} from: {os.path.join(app.static_folder, index_path)}")
     return send_from_directory(app.static_folder, index_path)
 
 if __name__ == '__main__':
