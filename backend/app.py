@@ -7,7 +7,7 @@ import threading
 import requests
 import time
 
-app = Flask(__name__, static_folder='/app/frontend/build')
+app = Flask(__name__, static_folder='/app/frontend/dist')
 CORS(app)
 
 # Sample in-memory product database with hardcoded barcode IDs
@@ -216,12 +216,14 @@ def get_cart():
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
-    print(f"Checking path: {app.static_folder}/{path}")  # Debug log
+    print(f"Checking path: {os.path.join(app.static_folder, path)}")  # Debug log
     if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
         print(f"Found file: {os.path.join(app.static_folder, path)}")  # Debug log
         return send_from_directory(app.static_folder, path)
-    print(f"Serving index.html from: {os.path.join(app.static_folder, 'index.html')}")  # Debug log
-    return send_from_directory(app.static_folder, 'index.html')
+    # Fallback to index.js or adjust based on frontend needs
+    index_path = 'index.js' if os.path.exists(os.path.join(app.static_folder, 'index.js')) else 'index.html'
+    print(f"Serving {index_path} from: {os.path.join(app.static_folder, index_path)}")  # Debug log
+    return send_from_directory(app.static_folder, index_path)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
