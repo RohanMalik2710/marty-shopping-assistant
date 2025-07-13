@@ -216,8 +216,11 @@ def get_cart():
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
-    if path != "" and os.path.exists(app.static_folder + '/' + path):
+    print(f"Checking path: {app.static_folder}/{path}")  # Debug log
+    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+        print(f"Found file: {os.path.join(app.static_folder, path)}")  # Debug log
         return send_from_directory(app.static_folder, path)
+    print(f"Serving index.html from: {os.path.join(app.static_folder, 'index.html')}")  # Debug log
     return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == '__main__':
