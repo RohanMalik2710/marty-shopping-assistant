@@ -1,0 +1,5 @@
+flask
+gunicorn
+pyzbar
+opencv-python
+requests
